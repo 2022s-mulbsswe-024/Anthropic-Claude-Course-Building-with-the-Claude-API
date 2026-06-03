@@ -1,0 +1,292 @@
+Anthropic Claude
+
+Agent Skills
+1. Make a md file so claud can understand your code using md file instaead of sending each time a long prompt
+
+Building with the Claude API
+1.Get API Key and use the claud api using theor model (setup using jupiter notebook)
+2.claude do not store the previous messages memory to maintain history we have to make helper funcion which store history
+3. system prompt
+4. Temperature set the temperature based on need
+0.0-0.3 low temperature Data Extraction,Coding Assistance,content moderation
+0.4-0.7 Medium temperature Summarization,Educstional Content,Problem Solving,creative writing
+0.8-1.0 Brainstorming,Creative writing, Marketing content,Joke generatin
+
+5. streaming 
+streaming = true
+get the raw chunks from calude
+RawContentBlockDeltaEvent = mostly contain the chunks
+use this to directly get the chunksadd_user_message(messages, "generate a one sentence movie idea?")
+with client.messages.create(
+    model=model,
+    max_tokens=1000,
+    messages=messages,
+    stream=True
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="")
+		
+
+6. remove extra header and footer
+use the prefilled assistant and a stop sequence
+
+7. Evaluation Engineering
+use xml tags and test the differ version of prompt
+prompt evaulation using model evaluator, code evaluator and human based evaluation
+
+
+8,Prompt Engineering
+Clear prompt, Use the following steps
+Guidlines,provide Structure Use XMl Tags for long prompt <records></records>
+Add multiple example in prompt
+zero shot prompt engineering just ask the answer of query
+signle shot give one example to help the model to do the task 
+multi shot give multiple examples for better results
+
+
+9. Tool
+claude can access the tool using tool parameter in api call
+create tool function
+from datetime import datetime
+
+
+def get_current_datetime(date_format="%Y-%m-%d %H:%M:%S"):
+    if not date_format:
+        raise ValueError("date_format cannot be empty")
+    return datetime.now().strftime(date_format)
+	
+	
+then Tool schema
+from anthropic.types import ToolParam
+
+get_current_datetime_schema = ToolParam({
+    "name": "get_current_datetime",
+    "description": "Returns the current date and time formatted according to the specified format",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "date_format": {
+                "type": "string",
+                "description": "A string specifying the format of the returned datetime. Uses Python's strftime format codes.",
+                "default": "%Y-%m-%d %H:%M:%S"
+            }
+        },
+        "required": []
+    }
+}
+)
+
+claude call the tool
+messages = []
+
+messages.append({
+    "role": "user",
+    "content": "What is the exact time, formatted as HH:MM:SS?"
+})
+
+response = client.messages.create(
+    model=model,
+    max_tokens=100,
+    messages=messages,
+    tools=[get_current_datetime_schema]
+)
+response
+
+
+Multiple tools call
+ToolUseBlock
+ToolResultBlock
+
+10. Streaming while multiple tool calls
+we have found a buffer during seconds its just some seconds buffer
+the solutoon to remove the buffering is Fine Graind tool Calling
+
+
+# use fine_grainde = True
+# for streaming without buffering
+bit if we use this we have to add a valid json
+invalid json can crash the code
+
+tool_choice: Tells the AI exactly when to use your custom functions.
+
+betas: Unlocks experimental, new AI capabilities before their official release.
+betas
+prompt-caching: Remembers long text. Makes calls cheaper and 4x faster.
+
+computer-use: Lets Claude control a screen, mouse, and keyboard.
+
+dreaming: Lets background agents fix mistakes and manage memories.
+
+task-budgets: Sets cost/token caps on long AI tasks.
+
+11. Text tool editor
+ability to view file or directory,range of lines, replace text in file, create new files, insert a specific line
+it do action on our file like add,insert etc and it work like copilot
+
+12.Web Search tool
+allows youy to search the web latest details and it dnt work like text editor tool we donot have to manually make a code to search
+just by using schema as a tool we can search the web
+web_search_schema = {
+    "type": "web_search_20250305", #March 5, 2025 (YYYYMMDD).
+    "name": "web_search",
+    "max_uses": 5, # search 5 times
+    "allowed_domains": ["nih.gov"],
+}
+
+13 Retrieval Argumented Generation
+option 1 : Get document text and with user question send to ai model and get answer, it can take time amd also long prompt might not fit the ai model
+
+option 2 : Rag , get document text > chunk the text, embedding or vector of chunks using embedding model > Save in vecotr Db > query embedding using same embedding model  >
+Search based on vectors similirty search > Semantic search done by vector db or you can also make you r own fucntion > give again the query and reposne of consine similirty to ai model to refine
+the output
+
+14 Chunking
+size based chunking 800 char devide by 4 200 chara each part total 4 chunks,
+structure based : chunk by sentence get these symbols ?<=[.!?] and create chunk, # Chunk by section : get h2 hifing and divide into chunk better chunking oif hiding are added
+semantic based chunking :embeded eachsignle sentence then do similirty then make chunks long process
+ 
+ 14 Embedding
+ when the chunks are created embedding process satrt or vectors , these are numerical repersaton of text with semantic meaning
+ anthropic dnt have embedding model use the voyageAI Embedding Model
+ 
+ 15 Cosisne Similarty and Consine Distance
+ Cosisne Similarty the vector value near to 1 are highly matches
+ Consine Distance the value near to 0 are highly match in most of vector sb we see cosine distance
+ 
+ we can do the similirt using consine similarity formula manually and vector db also proceds cosine distance
+ 16 BM25 lexical search:
+ Step 1: Tokenize the query
+Break the user's question into individual terms. For example, "a INC-2023-Q4-011" becomes ["a", "INC-2023-Q4-011"].
+
+Step 2: Count term frequency
+See how often each term appears across all your documents. Common words like "a" might appear 5 times, while specific terms like "INC-2023-Q4-011" might appear only once.
+
+Step 3: Weight terms by importance
+Terms that appear less frequently get higher importance scores. The word "a" gets low importance because it's common, while "INC-2023-Q4-011" gets high importance because it's rare.
+
+Step 4: Find best matches
+Return documents that contain more instances of the higher-weighted terms.
+
+If we mix both VectorIndex and BM25 the result are more better
+Here are 4 lines explaining how this hybrid work pipeline operates:
+
+* **Dual Search Execution:** A single query is sent simultaneously to a **Vector Index** (for semantic meaning) and a **BM25 Index** (for exact keyword/ID matching).
+* **Unified Interface:** A coordinator class called a `Retriever` standardizes both search engines under a single `search()` method to keep the code modular.
+* **Rank Fusion Calculation:** It uses **Reciprocal Rank Fusion (RRF)** to score documents based on their position in both lists, ensuring items that perform well in both systems rise to the top.
+* **Contextual Accuracy:** By merging both approaches, it solves vector search's blind spots—like missing specific product codes or ticket IDs—while retaining its deep understanding of natural language.
+RRF_score(d) = Σ(1 / (k + rank_i(d)))
+
+
+17 Extended thinking
+claude api provide also the extending thinking for more reasoning and complex task and it use hogh credits also
+redacted_thinking : if claude finds the data sensitive it changes into redacted_thinking mean in return instead of thinking blcok we found redicated thinking block
+   if thinking:
+        params["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": thinking_budget,
+        }
+Add thinking in param then call
+
+18Image Support:
+Up to 100 images across all messages in a single request
+Max size of 5MB per image
+When sending one image: max height/width of 8000px
+When sending multiple images: max height/width of 2000px
+Images can be included as base64 encoding or a URL to the image
+Each image counts as tokens based on its dimensions: tokens = (width px × height px) / 750
+With the help of prompt we can get better result for image processing etc
+  {
+    "type": "image", 
+    "source": {
+        "type": "base64",
+        "media_type": "image/png",
+        "data": image_bytes
+    }
+	
+
+19 Pdf Support
+claude also process the pdf files
+Text content throughout the document
+Images and charts embedded in the PDF
+Tables and their data relationships
+Document structure and formatting
+
+
+General : we conver the files and images into base 64 encoding scheme to send them over https etc and also model undertands this scheme
+
+20 . Citation
+by adding citation field in message/query we can get the cited source of document
+mean it show where from the response came in
+ "title" : "earth.pdf",
+    "citation" : {"enabled" : True}
+   },
+   
+   [ Plain Text Docs ] ──> [ Create Embeddings ] ──> [ Save to Vector DB + Metadata ]
+                                                             │
+                                                   (User asks a question)
+                                                             │
+                                                             ▼
+[ AI Model Prompt ] <── [ Backend Assigns [1], [2] ] <── [ Get Text Chunks Back ]
+
+
+21. Prompt caching
+claude do these step we give query/input
+Tokenizes the prompt into smaller pieces
+Creates embeddings for each token
+Adds context based on surrounding text
+Only then generates the actual output text
+After sending you the response, Claude throws away all this computational work - the tokenization, embeddings, and context analysis all get discarded.
+Prompt caching changes this workflow by saving the preprocessing work instead of discarding i
+
+use this blcok in content/message
+"cache_control": {
+           "type": "ephemeral"
+        }
+	
+if we use cache in tool call we need to use this at ,multiple places to save all the user message and assistant message
+
+You can add up to four cache breakpoints total. For example, you might cache your tools, then add another breakpoint partway through your conversation
+ history. This gives you flexibility in what gets cached when different parts of your request change.
+ There's a minimum threshold for caching: content must be at least 1024 tokens long to be cached
+ General ephemeral means temporary, short-lived, or fleeting.
+ tools_clone = tools.copy()
+        last_tool = tools_clone[-1]
+        last_tool["cache_control"] = {"type": "ephemeral"}
+        tools_clone[-1] = last_tool
+        params["tools"] = tools_clone
+
+cache help to use less credits
+
+22. Code execution and file api
+Files API
+The Files API provides an alternative way to handle file uploads. Instead of encoding images or PDFs directly in your messages as base64 data,
+ you can upload files ahead of time and reference them later.
+ 
+ Code Execution Tool
+Code execution is a server-based tool that doesn't require you to provide an implementation. You simply include a predefined tool schema in your request, and Claude can optionally execute Python code in an isolated Docker container.
+
+
+1.The Courier Upload:Files API.You upload your raw data (like streaming.csv) using the Files API. The system takes the file, stores it securely, 
+and hands you a unique File ID (like a tracking number).2.The Work Order:Anthropic API Call.You send a message to Claude. In this message, 
+you bundle two things: your instructions ("Find out why users are canceling!") and the File ID from Step 1. You also explicitly
+ turn on the code_execution tool.3.Entering the Lab:Isolated Container.Claude takes your File ID and enters the isolated lab. The system automatically
+ places your CSV file inside this lab so Claude can reach it.4.The Brainstorm & Execution:Iterative Python Coding.Claude writes Python code to 
+ read the CSV, calculate statistics, and generate a plot. It runs the code, looks at the errors or results, and might rewrite and rerun the 
+ code multiple times until the analysis is perfect.5.The Hand-off:Downloading Results.Claude steps out of the lab and hands you a text response,
+ alongside a new Output File ID for the chart it created. You use the Files API one last time to download that chart to your computer.
+ 
+ Anthropic allows to upload files with prompt then claude built in tool process the file and using the file id we can get the response also based on out query
+ 
+ 23. MCP Model Context Protocol
+ MCP shifts the burden of tool definitions and execution from your server to MCP servers. 
+ Instead of you writing, testing, and maintaining complex custom code (schemas and functions) to connect an AI to an outside service (like GitHub or AWS),
+ an MCP Server does that work for you. It acts as a pre-built wrapper around an API.
+ Anyone or any company (like AWS) can build an MCP server. Once created, any AI application can connect to it and instantly gain access to those tools.
+ MCP doesn't replace tool use; it replaces the work of building the tools. It gives you pre-defined tool schemas and functions
+ so you don't have to code them from scratch.
+ 
+ 24.
+ create the mcp tool
+ from mcp.server.fastmcp import FastMCP
+ @mcp.tool
+ then run the mcp server
